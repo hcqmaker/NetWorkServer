@@ -39,11 +39,11 @@ extern "C" {
 
 #if defined(_MSC_VER) && defined(WIN32)
 
-#pragma comment("lib", "libevent.lib")
-#pragma comment("lib", "libevent_core.lib")
-#pragma comment("lib", "libevent_extras.lib")
+#pragma comment(lib, "libevent.lib")
+#pragma comment(lib, "libevent_core.lib")
+#pragma comment(lib, "libevent_extras.lib")
 // use pthread for win32
-#pragma comment("lib", "pthreadVC2.lib")
+#pragma comment(lib, "pthreadVC2.lib")
 
 #endif
 
@@ -80,11 +80,14 @@ void buffered_on_write(struct bufferevent *bev, void *arg);
 void buffered_on_error(struct bufferevent *bev, short what, void *arg);
 
 static void server_job_function(struct job *job);
-void on_accept(int fd, sort ev, void *arg);
+void on_accept(int fd, short ev, void *arg);
 
-void runServer(void);
+int runServer(int port, int numthread);
 void killSever(void);
 
+#if defined(WIN32) && defined(_MSC_VER)
+void close(SOCKET fd);
+#endif
 
 
 #ifdef __cplusplus

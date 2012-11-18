@@ -1,4 +1,5 @@
 #include "work_queue.h"
+#include <stdlib.h>
 
 
 /** @brief add a node */
@@ -53,7 +54,7 @@ static void *worker_function(void *ptr)
 
 //-----------------------------------------------------------------------------
 //
-int work_queue_init(work_queue_t *workqueue, int numWorkers);
+int work_queue_init(work_queue_t *workqueue, int numWorkers)
 {
 	int i;
 	worker_t *worker;
@@ -97,7 +98,7 @@ void work_queue_shutdown(work_queue_t *workqueue)
 {
 	worker_t *woker = NULL;
 
-	for (woker == workqueue->workers; worker != NULL; worker = worker->next)
+	for (woker = workqueue->workers; woker != NULL; woker = woker->next)
 		woker->terminate = 1;
 
 	pthread_mutex_lock(&workqueue->jobs_mutex);
