@@ -1,6 +1,8 @@
-#include "work_queue.h"
-#include <stdlib.h>
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "work_queue.h"
 
 /** @brief add a node */
 #define  LL_ADD(item, list) { \
@@ -48,6 +50,7 @@ static void *worker_function(void *ptr)
 
 	free(worker);
 	pthread_exit(NULL);
+	return worker_function;
 
 }
 
@@ -70,7 +73,7 @@ int work_queue_init(work_queue_t *workqueue, int numWorkers)
 
 	for (i = 0; i < numWorkers; ++i)
 	{
-		if ((worker = malloc(sizeof(worker_t))) == NULL)
+		if ((worker = (worker_t*)malloc(sizeof(worker_t))) == NULL)
 		{
 			perror("Failed to allocate all workers");
 			return 1;

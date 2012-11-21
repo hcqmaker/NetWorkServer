@@ -13,10 +13,6 @@
 /************************************************************************/
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -80,7 +76,9 @@ void buffered_on_write(struct bufferevent *bev, void *arg);
 void buffered_on_error(struct bufferevent *bev, short what, void *arg);
 
 static void server_job_function(struct job *job);
-void on_accept(int fd, short ev, void *arg);
+//void on_accept(int fd, short ev, void *arg);
+static void signal_cb(evutil_socket_t sig, short events, void *user_data);
+static void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data);
 
 int runServer(int port, int numthread);
 void killSever(void);
@@ -90,8 +88,5 @@ void close(SOCKET fd);
 #endif
 
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // __SMSERVER_H__

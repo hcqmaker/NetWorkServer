@@ -148,7 +148,7 @@ static void logfn(int is_warn, const char *msg) {
 //
 void on_accept(int fd, short ev, void *arg)
 {
-	int client_fd;
+	//int client_fd;
 	struct sockaddr_in ca;
 	int client_len = sizeof(ca);
 	work_queue_t *workqueue = (work_queue_t *)arg;
@@ -178,7 +178,7 @@ int runServer(int port, int numthread)
 	sigaction(SIGINT, &siginfo, NULL);
 	sigaction(SIGTERM, &siginfo, NULL);
 
-	*/
+	
 	
 #ifdef WIN32
 	{
@@ -240,6 +240,7 @@ int runServer(int port, int numthread)
 
 	printf("Server shutdown .\n");
 	return 0;
+	*/
 
 
 	struct event_base *base;
@@ -266,7 +267,16 @@ int runServer(int port, int numthread)
 	sin.sin_addr.s_addr = INADDR_ANY;
 	sin.sin_port = htons(port);
 
-	listener = evconnlistener_new_bind(base, on_accept1, (void*)base, 
+	if (work_queue_init(&workqueue, numthread))
+	{
+		perror("Fail to create work queue");
+		close(listenfd);
+		work_queue_shutdown(&workqueue);
+		return 1;
+	}
+
+
+	listener = evconnlistener_new_bind(base, on_accept, (void *)&workqueue, 
 		LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
 		(struct sockaddr*)&sin, sizeof(sin));
 	if (listener)
@@ -275,7 +285,7 @@ int runServer(int port, int numthread)
 		return 1;
 	}
 
-	signal_event = evsignal_new(base, SIGINT, signal_cb, (void*)base);
+	signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)&workqueue);
 	if (!signal_event || event_add(signal_event, NULL) < 0)
 	{
 		fprintf(stderr, "Could not create/add signal event !\n");
@@ -301,13 +311,17 @@ void close(SOCKET fd)
 
 static void signal_cb(evutil_socket_t sig, short events, void *user_data)
 {
-	fprintf(stdout, "Received signal %d: %s.  Shutting down.\n", signal, strsignal(signal));
+	//fprintf(stdout, "Received signal %d: %s.  Shutting down.\n", signal, strsignal(signal));
+	fprintf(stdout, "Received signal %d: .  Shutting down.\n", sig);
 	killSever();
 }
 
-static void on_accept1(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
+static void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
 {
-
+	int client_fd;
+	struct sockaddr_in ca;
+	int client_len = sizeof(ca);
+	work_queue_t *workqueue = (work_queue_t *)user_data;
 }
 
 
@@ -320,6 +334,8 @@ void killSever(void)
 	{
 		perror("Error shutting down server");
 	}
-	sprintf(stdout, "Stopping workers. \n");
+	
+	printf("Stopping workers. \n");
+	//sprintf(stdout, "Stopping workers. \n");
 	work_queue_shutdown(&workqueue);
 }

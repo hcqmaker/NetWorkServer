@@ -14,6 +14,7 @@ from: hcqmaker
 // in window you can use pthread for win
 // download from ftp://sourceware.org/pub/pthreads-win32
 
+
 #include <pthread.h>
 
 struct worker 
@@ -50,5 +51,7 @@ typedef struct work_queue work_queue_t;
 int work_queue_init(work_queue_t *workqueue, int numWorkers);
 void work_queue_shutdown(work_queue_t *workqueue);
 void work_queue_add_job(work_queue_t *workqueue, job_t *job);
+
+
 
 #endif // __WORK_QUEUE_H__
