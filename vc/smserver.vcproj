@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pthreadVC2.lib libevent.lib libevent_core.lib libevent_extras.lib WSOCK32.LIB pthreadVCE2.lib pthreadVSE2.lib ws2_32.lib"
+				AdditionalDependencies="pthreadVC2.lib libevent.lib libevent_core.lib libevent_extras.lib pthreadVCE2.lib pthreadVSE2.lib ws2_32.lib"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="D:\program\Server\libevent;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x64&quot;;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x86&quot;"
 				GenerateDebugInformation="true"
@@ -192,7 +192,19 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\hello_server.txt"
+				>
+			</File>
+			<File
+				RelativePath=".\old_sm_server.txt"
+				>
+			</File>
+			<File
 				RelativePath="..\src\sm_server.h"
+				>
+			</File>
+			<File
+				RelativePath=".\sm_server.txt"
 				>
 			</File>
 			<File

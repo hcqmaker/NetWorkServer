@@ -12,36 +12,30 @@
 */
 /************************************************************************/
 
-
-#include <sys/types.h>
-#include <sys/stat.h>
-
-
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <event2/event-config.h>
-#include <event2/event.h>
-#include <event2/bufferevent.h>
-
 #include <string.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <stdio.h>
 #include <signal.h>
+#ifndef WIN32
+#include <netinet/in.h>
+# ifdef _XOPEN_SOURCE_EXTENDED
+#  include<arpa/inet.h>
+# endif
+#include <sys/socket.h>
+#else
+#include <WinSock2.h>
+#endif
 
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/event.h>
+
+#include <event2/bufferevent_struct.h>
 
 #include "work_queue.h"
 
-
-#if defined(_MSC_VER) && defined(WIN32)
-
-#pragma comment(lib, "libevent.lib")
-#pragma comment(lib, "libevent_core.lib")
-#pragma comment(lib, "libevent_extras.lib")
-// use pthread for win32
-#pragma comment(lib, "pthreadVC2.lib")
-
-#endif
 
 #define  errorOut(...) {\
 	fprintf(stderr, "%s:%d: %s:\t", __FILE__, __LINE__, __FUNCTION__); \
@@ -58,27 +52,21 @@ struct client
 
 typedef client client_t;
 
-
 static struct event_base *evbase_accept;
 static work_queue_t workqueue;
-
-static void signalhandler(int signal);
-
-static int setnonbolck(int fd);
 
 static void closeClient(client_t *client);
 static void coloseAndFreeClient(client_t *client);
 
-//
+static void signal_cb(evutil_socket_t sig, short events, void *user_data);
+static void server_job_function(struct job *job);
+
+// server 
 void buffered_on_read(struct bufferevent *bev, void *arg);
 void buffered_on_write(struct bufferevent *bev, void *arg);
+void buffered_on_event(struct bufferevent *bev, short what, void *arg);
 
-void buffered_on_error(struct bufferevent *bev, short what, void *arg);
-
-static void server_job_function(struct job *job);
-//void on_accept(int fd, short ev, void *arg);
-static void signal_cb(evutil_socket_t sig, short events, void *user_data);
-static void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data);
+void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data);
 
 int runServer(int port, int numthread);
 void killSever(void);

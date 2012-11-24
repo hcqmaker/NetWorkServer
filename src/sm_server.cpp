@@ -1,51 +1,30 @@
 #include "sm_server.h"
-#include <event2/buffer.h>
-#include <event2/bufferevent.h>
-#include <event2/bufferevent_struct.h>
 
-#include <event2/listener.h>
-#include <event2/util.h>
-#include <event2/event.h>
+#define  MAX_SIZE 4096
 
-#define MAX_BUFF 4096
-#define  CONNECTION_BACKLOG 100
-//----------------------------------------------------------------
+/**
+这里的做法是根据原来的方式进行其中可能在新的机制中会出问题
+方案1：
+	使用原始的源代码方式进行
+	在libevent的 on_accept, bufferevent_on_read, bufferevent_on_read, bufferevent_on_error,
+	中对接受的数据进行处理，这里使用work_queue来进行
+
+方案2：
+
+
+*/
+
+
+#define  WAY_TYPE 1
+
+#define WAY_TYPE_1 1
+#define WAY_TYPE_2 2
+
+
+#if WAY_TYPE == WAY_TYPE_1
+//---------------------------------------------------------------------
 //
-void signalhandler(int signal)
-{
-	//fprintf(stdout, "Receive singnal %d: %s. shutting down. \n", signal, strsignal(signal));
-	fprintf(stdout, "Receive singnal %d: . shutting down. \n", signal);
-	killSever();
-}
-
-//----------------------------------------------------------------
-//
-int setnonbolck(int fd)
-{
-#if defined(__GUNC__)
-
-	int flags = fcntl(fd, F_GETFL);
-
-	if (flags < 0) 
-		return flags;
-
-	flags |= O_NONBLOCK;
-
-	if (fcntl(fd, F_SETFL, flags) < 0)
-		return -1;
-#else
-	unsigned long ul = 1;
-	int ret = ioctlsocket(fd, FIONBIO, (unsigned long*)&ul);
-	if (ret == SOCKET_ERROR)
-	{
-		return -1;
-	}
-#endif
-}
-
-//----------------------------------------------------------------
-//
-void closeClient(client_t *client)
+static void closeClient(client_t *client)
 {
 	if (client != NULL)
 	{
@@ -54,12 +33,14 @@ void closeClient(client_t *client)
 	}
 }
 
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
-void coloseAndFreeClient(client_t *client)
+static void coloseAndFreeClient(client_t *client)
 {
 	if (client != NULL)
 	{
+		// 这里要注意的是libevent在关闭的时候会自动去清理他需要清理的部分
+		// 所以
 		closeClient(client);
 		if (client->evbuff != NULL)
 		{
@@ -82,166 +63,156 @@ void coloseAndFreeClient(client_t *client)
 	}
 }
 
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
+
+static void signal_cb(evutil_socket_t sig, short events, void *user_data)
+{
+
+	killSever();
+	struct event_base *base = (event_base *)user_data;
+	struct timeval delay = { 2, 0};
+	printf("Caught an interrupt signal; exiting cleanly in two secondes \n");
+	event_base_loopexit(base, &delay);
+}
+
+//---------------------------------------------------------------------
+// 这里是一个死循环其实就是一个线程
+static void server_job_function(struct job *job)
+{
+	client_t *client = (client_t *)job->user_data;
+	event_base_dispatch(client->evbase);
+	coloseAndFreeClient(client);
+	free(job);
+}
+
+//---------------------------------------------------------------------
+//
+
+// server 
 void buffered_on_read(struct bufferevent *bev, void *arg)
 {
 	client_t *client = (client_t *)arg;
-	char data[MAX_BUFF];
+	char data[MAX_SIZE];
 	int nbytes;
 
-	
 	while (1)
 	{
-		int length = evbuffer_get_length(bev->input);
-		if (length <= 0)
+		int lenth = evbuffer_get_length(bev->input);
+		if (lenth <= 0)
 			break;
 
-		nbytes = (length > MAX_BUFF) ? MAX_BUFF : length;
+		nbytes = (lenth > MAX_SIZE) ? MAX_SIZE:lenth;
 		evbuffer_remove(bev->input, data, nbytes);
 		evbuffer_add(client->output_buff, data, nbytes);
 	}
 
 	if (bufferevent_write_buffer(bev, client->output_buff))
 	{
-		errorOut("Error sending to client on fd %d", client->fd);
+		fprintf(stderr, "error sending to client on fd %d  \n", client->fd);
 		closeClient(client);
 	}
 }
 
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
 void buffered_on_write(struct bufferevent *bev, void *arg)
 {
 
 }
 
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
-
-void buffered_on_error(struct bufferevent *bev, short what, void *arg)
+void buffered_on_event(struct bufferevent *bev, short events, void *arg)
 {
-	errorOut("error happen in fd:  %", what);
-	closeClient((client_t*) arg);
+
+	if (events & BEV_EVENT_EOF) {
+		fprintf(stdout, "Connection closed in event: %d  \n", events);
+	} else if (events & BEV_EVENT_ERROR) {
+		printf("Got an error on the connection: %s\n",
+		    strerror(errno));/*XXX win32*/
+	}
+	/* None of the other events can happen here, since we haven't enabled
+	 * timeouts */
+	//bufferevent_free(bev);
+
+	closeClient((client_t *)arg);
 }
 
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
 
-void server_job_function(struct job *job)
+void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
 {
-	client_t *client = (client_t *)job->user_data;
+	fprintf(stdout, "something connect fd:%d  \n", fd);
+	struct sockaddr_in client_addr;
+	int client_len = sizeof(client_addr);
+	work_queue_t *workqueue = (work_queue_t *)user_data;
+	client_t *client;
+	job_t *job;
 
-	event_base_dispatch(client->evbase);
-	coloseAndFreeClient(client);
-	free(job);
-}
-
-static int verbose = 0;
-static void logfn(int is_warn, const char *msg) {
-	if (!is_warn && !verbose)
+	if (evutil_make_socket_nonblocking(fd) < 0)
+	{
+		fprintf(stderr, "failed to set client socket to non-blocking :%d  \n", fd);
+		evutil_make_socket_closeonexec(fd);
 		return;
-	fprintf(stderr, "%s: %s\n", is_warn?"WARN":"INFO", msg);
+	}
+
+	if ((client = (client_t *)malloc(sizeof(*client))) == NULL)
+	{
+		fprintf(stderr, "fail to allocate memory for client state :%d  \n", fd);
+		evutil_make_socket_closeonexec(fd);
+		return;
+	}
+
+	memset(client, 0, sizeof(*client));
+	client->fd = fd;
+
+	if ((client->output_buff = evbuffer_new()) == NULL)
+	{
+		fprintf(stderr, "client output buffer allocation failed \n");
+		coloseAndFreeClient(client);
+		return;
+	}
+
+	if ((client->evbase = event_base_new()) == NULL)
+	{
+		fprintf(stderr, "client event_base creation failed \n");
+		coloseAndFreeClient(client);
+		return;
+	}
+
+	if ((client->evbuff = bufferevent_socket_new(client->evbase, fd, BEV_OPT_CLOSE_ON_FREE)) == NULL)
+	{
+		fprintf(stderr, "client bufferevent creation failed fd:%d\n", fd);
+		event_base_loopbreak(client->evbase);
+		coloseAndFreeClient(client);
+		return;
+	}
+
+	bufferevent_setcb(client->evbuff, buffered_on_read, buffered_on_write, buffered_on_event, client);
+	bufferevent_base_set(client->evbase, client->evbuff);
+	bufferevent_enable(client->evbuff, EV_READ);
+
+
+	if ((job = (job_t *)malloc(sizeof(*job))) == NULL)
+	{
+		fprintf(stderr, "failed to allocate memory for job state fd:%d\n", fd);
+		coloseAndFreeClient(client);
+		return;
+	}
+
+	job->job_function = server_job_function;
+	job->user_data = client;
+
+	work_queue_add_job(workqueue, job);
 }
 
-//----------------------------------------------------------------
-//
-void on_accept(int fd, short ev, void *arg)
-{
-	//int client_fd;
-	struct sockaddr_in ca;
-	int client_len = sizeof(ca);
-	work_queue_t *workqueue = (work_queue_t *)arg;
-
-}
-
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
 
 int runServer(int port, int numthread)
 {
-	int listenfd;
-	struct sockaddr_in listen_addr;
-	struct event ev_accept;
-	int reuseaddr_on;
-
-	/*
-	sigset_t sigset;
-	sigemptyset(&sigset);
-
-	struct sigaction siginfo = {
-		.sa_handler = signalhandler,
-		.sa_mask = sigset,
-		.sa_flags = SA_RESTART,
-	};
-
-	sigaction(SIGINT, &siginfo, NULL);
-	sigaction(SIGTERM, &siginfo, NULL);
-
-	
-	
-#ifdef WIN32
-	{
-		WSADATA WSAData;
-		WSAStartup(0x101, &WSAData);
-	}
-#endif
-
-	listenfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (listenfd < 0)
-	{
-		errorOut("listen failed");
-		return 1;
-	}
-
-	memset(&listen_addr, 0, sizeof(listen_addr));
-	listen_addr.sin_family = AF_INET;
-	listen_addr.sin_addr.s_addr = INADDR_ANY;
-	listen_addr.sin_port = htons(port);
-	if (bind(listenfd, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0)
-	{
-		errorOut("bind failed");
-		return 1;
-	}
-
-	if (listen(listenfd, CONNECTION_BACKLOG) < 0)
-	{
-		errorOut("bind failed");
-		return 1;
-	}
-	
-	reuseaddr_on = 1;
-	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuseaddr_on, sizeof(reuseaddr_on));
-
-	if (setnonbolck(listenfd) < 0)
-	{
-		errorOut("bind failed");
-		return 1;
-	}
-
-	if ((evbase_accept = event_base_new()) == NULL)
-	{
-		perror("Unable to create socket accept event base");
-		close(listenfd);
-		return 1;
-	}
-
-	if (work_queue_init(&workqueue, numthread))
-	{
-		perror("Fail to create work queue");
-		close(listenfd);
-		work_queue_shutdown(&workqueue);
-		return 1;
-	}
-
-	event_set(&ev_accept, listenfd, EV_READ | EV_PERSIST, on_accept, (void *)&workqueue);
-	event_base_set(evbase_accept, &ev_accept);
-	event_add(&ev_accept, NULL);
-
-	printf("Server shutdown .\n");
-	return 0;
-	*/
-
 
 	struct event_base *base;
 	struct evconnlistener *listener;
@@ -249,46 +220,44 @@ int runServer(int port, int numthread)
 	struct sockaddr_in sin;
 
 #ifdef WIN32
-	{
-		WSADATA WSAData;
-		WSAStartup(0x101, &WSAData);
-	}
+	WSAData wsa_data;
+	WSAStartup(0x0201,&wsa_data);
 #endif
 
 	base = event_base_new();
 	if (!base)
 	{
-		fprintf(stderr, "Could not initialize libevent !\n");
+		fprintf(stderr, "could not initializ libevent \n");
 		return 1;
 	}
 
+
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
 	sin.sin_port = htons(port);
 
 	if (work_queue_init(&workqueue, numthread))
 	{
-		perror("Fail to create work queue");
-		close(listenfd);
+		fprintf(stderr, "Failed to create work queue \n");
 		work_queue_shutdown(&workqueue);
 		return 1;
 	}
-
-
-	listener = evconnlistener_new_bind(base, on_accept, (void *)&workqueue, 
+	
+	listener = evconnlistener_new_bind(base, on_accept, (void*)&workqueue,
 		LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
-		(struct sockaddr*)&sin, sizeof(sin));
-	if (listener)
+		(struct sockaddr *)&sin, sizeof(sin));
+
+	if (!listener)
 	{
-		fprintf(stderr, "Could not create a listener !\n");
+		fprintf(stderr, "could not initializ libevent \n");
 		return 1;
 	}
 
-	signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)&workqueue);
+
+	signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
 	if (!signal_event || event_add(signal_event, NULL) < 0)
 	{
-		fprintf(stderr, "Could not create/add signal event !\n");
+		fprintf(stderr, "could not created/add a signal event \n");
 		return 1;
 	}
 
@@ -298,44 +267,23 @@ int runServer(int port, int numthread)
 	event_free(signal_event);
 	event_base_free(base);
 
+#ifdef WIN32
+	WSACleanup();
+#endif
 	printf("done \n");
 	return 0;
 }
 
-#if defined(WIN32) && defined(_MSC_VER)
-void close(SOCKET fd)
-{
-	closesocket(fd);
-}
-#endif
-
-static void signal_cb(evutil_socket_t sig, short events, void *user_data)
-{
-	//fprintf(stdout, "Received signal %d: %s.  Shutting down.\n", signal, strsignal(signal));
-	fprintf(stdout, "Received signal %d: .  Shutting down.\n", sig);
-	killSever();
-}
-
-static void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *user_data)
-{
-	int client_fd;
-	struct sockaddr_in ca;
-	int client_len = sizeof(ca);
-	work_queue_t *workqueue = (work_queue_t *)user_data;
-}
-
-
-//----------------------------------------------------------------
+//---------------------------------------------------------------------
 //
 void killSever(void)
 {
-	fprintf(stdout, "Stopping socket listener event loop. \n");
-	if (event_base_loopexit(evbase_accept, NULL))
-	{
+	fprintf(stdout, "Stopping socket listener event loop.\n");
+	if (event_base_loopexit(evbase_accept, NULL)) {
 		perror("Error shutting down server");
 	}
-	
-	printf("Stopping workers. \n");
-	//sprintf(stdout, "Stopping workers. \n");
+	fprintf(stdout, "Stopping workers.\n");
 	work_queue_shutdown(&workqueue);
 }
+
+#endif // 1
