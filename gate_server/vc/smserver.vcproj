@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="D:\program\Server\libevent\include;&quot;D:\program\Server\libevent\WIN32-Code&quot;;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\include&quot;"
+				AdditionalIncludeDirectories="D:\program\Server\libevent\include;&quot;D:\program\Server\libevent\WIN32-Code&quot;;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\include&quot;;&quot;D:\tool\mysql-5.5.27-winx64\include&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -61,9 +61,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pthreadVC2.lib libevent.lib libevent_core.lib libevent_extras.lib pthreadVCE2.lib pthreadVSE2.lib ws2_32.lib"
+				AdditionalDependencies="pthreadVC2.lib libevent.lib libevent_core.lib libevent_extras.lib pthreadVCE2.lib pthreadVSE2.lib ws2_32.lib libmysqld.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="D:\program\Server\libevent;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x64&quot;;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x86&quot;"
+				AdditionalLibraryDirectories="D:\program\Server\libevent;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x64&quot;;&quot;D:\program\Server\pthreads-w32-2-9-1-release\Pre-built.2\lib\x86&quot;;&quot;D:\tool\mysql-5.5.27-winx64\lib&quot;"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				TargetMachine="1"
@@ -178,6 +178,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\mysql_handler.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\src\sm_server.cpp"
 				>
 			</File>
@@ -193,6 +197,10 @@
 			>
 			<File
 				RelativePath=".\hello_server.txt"
+				>
+			</File>
+			<File
+				RelativePath=".\mysql_handler.h"
 				>
 			</File>
 			<File

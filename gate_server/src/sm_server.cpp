@@ -193,6 +193,7 @@ void on_accept(struct evconnlistener *listener, evutil_socket_t fd, struct socka
 	bufferevent_setcb(client->evbuff, buffered_on_read, buffered_on_write, buffered_on_event, client);
 	bufferevent_base_set(client->evbase, client->evbuff);
 	bufferevent_enable(client->evbuff, EV_READ);
+	//bufferevent_enable(client->evbuff, EV_WRITE);
 
 
 	if ((job = (job_t *)malloc(sizeof(*job))) == NULL)
